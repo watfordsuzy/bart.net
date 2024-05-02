@@ -10,6 +10,9 @@
     <PackageTags>networking;routing;routing table;cidr;ipv4;ipv6</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReleaseNotes>(Please edit RELEASE_NOTES.txt instead)</PackageReleaseNotes>
+    <PackageProjectUrl>https://github.com/watfordsuzy/bart.net</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/watfordsuzy/bart.net</RepositoryUrl>
     <Authors>Suzy</Authors>
     <Company>Suzy</Company>
     <Copyright>Copyright (c) 2024 Suzy Inc</Copyright>
@@ -32,6 +35,17 @@
     <None Include="..\LICENSE.txt" Pack="true" PackagePath="\" />
     <None Include="..\README.md" Pack="true" PackagePath="\" />
     <None Include="..\THIRD_PARTY.md" Pack="true" PackagePath="\" />
+    <None Include="..\RELEASE_NOTES.txt" Pack="true" PackagePath="\" />
   </ItemGroup>
+
+  <!-- Release Notes -->
+  <Target Name="PreparePackageReleaseNotesFromFile" AfterTargets="Build">
+    <ReadLinesFromFile File="..\RELEASE-NOTES.txt" >
+      <Output TaskParameter="Lines" ItemName="ReleaseNoteLines"/>
+    </ReadLinesFromFile>
+    <PropertyGroup>
+      <PackageReleaseNotes>@(ReleaseNoteLines, '%0a')</PackageReleaseNotes>
+    </PropertyGroup>
+  </Target>
 
 </Project>

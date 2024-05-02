@@ -1,0 +1,7 @@
+Bart.NET Release Notes
+======================
+
+1.0.0-beta
+----------
+- Initial release
+- Basic routing table features (Insert, Lookup)
