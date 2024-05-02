@@ -6,6 +6,9 @@ on:
       - 'main'
   pull_request:
 
+env:
+  CI_DISABLE_NBGV: true
+
 jobs:
   build:
     name: Build
