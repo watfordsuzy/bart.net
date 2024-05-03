@@ -38,4 +38,4 @@ jobs:
         run: dotnet test -c Release --no-build --no-restore
 
       - name: Push to NuGet.org
-        run: dotnet nuget push ./Bart.NET/bin/Release/net8.0/Bart.NET-*.nupkg -s https://api.nuget.org/v3/index.json -k ${{ secrets.NUGET_PUSH_KEY }}
+        run: dotnet nuget push ./Bart.NET/bin/Release/Bart.NET-*.nupkg -s https://api.nuget.org/v3/index.json -k ${{ secrets.NUGET_PUSH_KEY }}
