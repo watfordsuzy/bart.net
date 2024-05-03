@@ -36,7 +36,7 @@ public class NodePrefixBenchmarks
     public void AddOrUpdatePrefix()
     {
         SlowNTEntry<int> route = _routes[Random.Shared.Next(_routes.Count)];
-        _node.AddOrUpdatePrefix(route.Octet, route.Bits, old => old + 1);
+        _node.AddOrUpdatePrefix(route.Octet, route.Bits, _ => 0, (_, old) => old + 1);
     }
 
     [Benchmark]
@@ -47,7 +47,7 @@ public class NodePrefixBenchmarks
     }
 
     [Benchmark]
-    public (uint baseIdx, int? val, bool ok) LpmByIndex()
+    public (uint baseIndex, int? val, bool ok) LpmByIndex()
     {
         SlowNTEntry<int> route = _routes[Random.Shared.Next(_routes.Count)];
         uint index = PrefixToBaseIndex(route.Octet, route.Bits);

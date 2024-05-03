@@ -1,16 +1,22 @@
 // Copyright (c) 2024 Suzy Inc.
 // SPDX-License-Identifier: MIT
 
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 
 namespace Bart.NET;
 
-public class Table<TValue>
+/// <summary>
+/// Represents a routing table that can store values per route prefix (IPv4 and IPv6).
+/// </summary>
+/// <typeparam name="TValue">The type of the values in the routing table.</typeparam>
+public sealed class Table<TValue>
+    where TValue : notnull
 {
     private readonly Node<TValue> _rootV4 = new();
     private readonly Node<TValue> _rootV6 = new();
 
-    protected Node<TValue> GetRootByVersion(IPAddress ip)
+    private Node<TValue> GetRootByVersion(IPAddress ip)
         => ip.AddressFamily switch
         {
             System.Net.Sockets.AddressFamily.InterNetwork => _rootV4,
@@ -29,21 +35,48 @@ public class Table<TValue>
                 ArgumentOutOfRangeException.ThrowIfGreaterThan(prefixLength, 32);
                 break;
             case System.Net.Sockets.AddressFamily.InterNetworkV6:
-                ArgumentOutOfRangeException.ThrowIfNegative(prefixLength);
-                ArgumentOutOfRangeException.ThrowIfGreaterThan(prefixLength, 128);
                 if (ip.IsIPv4MappedToIPv6)
                 {
                     throw new ArgumentException("Convert IPv4-in-IPv6 mapped addresses to IPv4 first");
                 }
+                ArgumentOutOfRangeException.ThrowIfNegative(prefixLength);
+                ArgumentOutOfRangeException.ThrowIfGreaterThan(prefixLength, 128);
                 break;
             default:
                 throw new ArgumentException($"Unsupported Address Family: {ip.AddressFamily}", nameof(ip));
         }
     }
 
+    /// <summary>
+    /// Inserts a route into the table with the given value.
+    /// </summary>
+    /// <param name="ipnw">The <see cref="IPNetwork"/> instance describing the route.</param>
+    /// <param name="value">The value to associate with the route.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="ipnw"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><para><paramref name="ipnw"/> does not have a supported <see cref="IPAddress.AddressFamily"/></para>
+    /// <para>-or-</para>
+    /// <para><paramref name="ipnw"/> represents an IPv4 route mapped to an IPv6 address. Map the address into IPv4 space
+    /// (<see cref="IPAddress.MapToIPv4"/>) and convert the <see cref="IPNetwork.PrefixLength"/> first.</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">The <see cref="IPNetwork.PrefixLength"/> is not valid.</exception>
     public void Insert(IPNetwork ipnw, TValue value)
-        => Insert(ipnw.BaseAddress, ipnw.PrefixLength, value);
+    {
+        ArgumentNullException.ThrowIfNull(ipnw);
 
+        this.Insert(ipnw.BaseAddress, ipnw.PrefixLength, value);
+    }
+
+    /// <summary>
+    /// Inserts a route into the table with the given value.
+    /// </summary>
+    /// <param name="ip">The base address of the route.</param>
+    /// <param name="prefixLength">The CIDR prefix length of the route.</param>
+    /// <param name="value">The value to associate with the route.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="ip"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><para><paramref name="ip"/> does not have a supported <see cref="IPAddress.AddressFamily"/></para>
+    /// <para>-or-</para>
+    /// <para><paramref name="ip"/> represents an IPv4 route mapped to an IPv6 address. Map the address into IPv4 space
+    /// (<see cref="IPAddress.MapToIPv4"/>) and convert <paramref name="prefixLength"/> first.</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="prefixLength"/> is not valid for <paramref name="ip"/>.</exception>
     public void Insert(IPAddress ip, int prefixLength, TValue value)
     {
         ValidateIPAddressAndPrefixLength(ip, prefixLength);
@@ -92,11 +125,36 @@ public class Table<TValue>
         }
     }
 
-    public bool TryGetValue(IPAddress ip, out TValue? value)
+    /// <summary>
+    /// Determines whether the <see cref="Table{TValue}"/> contains a route with the specified IP.
+    /// </summary>
+    /// <param name="ip">The <see cref="IPAddress"/> to locate in the <see cref="Table{TValue}"/>.</param>
+    /// <returns><see langword="true"/> if the <see cref="Table{TValue}"/> contains a route
+    /// which includes the specified IP; otherwise, <see langword="false"/>.</returns>
+    public bool Contains(IPAddress ip)
+        => this.TryGetValue(ip, out _);
+
+    /// <summary>
+    /// Gets the value associated with the specified <see cref="IPAddress"/>.
+    /// </summary>
+    /// <param name="ip">The <see cref="IPAddress"/> to search within the routing table.</param>
+    /// <param name="value">When this method returns, contains the value associated with
+    /// the specified IP, if a route containing the IP is found; otherwise, the default
+    /// value for the type of the <paramref name="value"/> parameter. This parameter
+    /// is passed uninitialized.</param>
+    /// <returns><see langword="true"/> if <paramref name="ip"/> was found within a route
+    /// in the <see cref="Table{TValue}"/>; otherwise, <see langword="false"/>.</returns>
+    public bool TryGetValue(IPAddress ip, [NotNullWhen(true)] out TValue? value)
     {
         ArgumentNullException.ThrowIfNull(ip);
 
         value = default;
+
+        // Map IPv4-over-IPv6 back to IPv4
+        if (ip.IsIPv4MappedToIPv6)
+        {
+            ip = ip.MapToIPv4();
+        }
 
         Node<TValue> node = this.GetRootByVersion(ip);
 
@@ -140,7 +198,7 @@ public class Table<TValue>
         {
 		    // lookup only in nodes with prefixes, skip over intermediate nodes
             if (node.HasPrefixes
-                && node.LpmByOctet(octet) is { ok: true, val: TValue foundValue })
+                && node.LpmByOctet(octet) is { ok: true, value: TValue foundValue })
             {
     			// longest prefix match
                 value = foundValue;

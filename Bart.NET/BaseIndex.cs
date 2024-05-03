@@ -25,61 +25,108 @@ internal static class BaseIndex
 	// baseIndex of the last host route: prefixToBaseIndex(255,8)
 	public const int LastHostIndex = 0b1_1111_1111; // 511
 
-    public const int StrideLength = 8;
-    public const int MaxTreeDepth = 128 / StrideLength;
-    public const int MaxNodeChildren = 1 << StrideLength;
-    public const int MaxNodePrefixes = 1 << (StrideLength + 1);
+    public const int StrideLength = 8; // one octet
+    public const int MaxTreeDepth = 128 / StrideLength; // 16 (IPv6)
+    public const int MaxNodeChildren = 1 << StrideLength; // 256 (possible route branches per octet)
+    public const int MaxNodePrefixes = 1 << (StrideLength + 1); // 512
 
+    /// <summary>
+    /// Maps a prefix table as a complete binary tree. This is the
+    /// so called <c>baseIndex</c> a.k.a. heapFunc.
+    /// </summary>
+    /// <param name="octet">An octet of the route prefix.</param>
+    /// <param name="prefixLength">The length of the CIDR prefix covering the octet.</param>
+    /// <returns>The base index to use within a bitset.</returns>
     public static uint PrefixToBaseIndex(byte octet, int prefixLength)
     {
         return (uint)(octet >> (StrideLength - prefixLength)) + (1U << prefixLength);
     }
 
+    /// <summary>
+    /// Maps an octet to a baseIndex, i.e. host routes. Used for
+    /// host routes in a lookup.
+    /// </summary>
+    /// <param name="octet">An octet in the host prefix.</param>
+    /// <returns>The base index to use within a bitset.</returns>
     public static uint OctetToBaseIndex(byte octet)
     {
         return octet + (uint)FirstHostIndex; // just: octet + 256
     }
 
+    /// <summary>
+    /// Finds the first octect for a network prefix in order
+    /// to produce valid <see cref="IPNetwork"/> instances.
+    /// </summary>
+    /// <param name="octet">An unmasked octet.</param>
+    /// <param name="bits">The bits of the CIDR prefix covering
+    /// <paramref name="octet"/>.</param>
+    /// <returns>An octet masked by the CIDR prefix, uncovering
+    /// the first valid octet for the prefix.</returns>
     public static byte FirstOctetOfPrefix(byte octet, int bits)
     {
         return (byte)(octet & ~s_hostMasks[Math.Min(bits, 8)]);
     }
 
-    // Calculates the last host index of a prefix given an octet and the number of bits
+    /// <summary>
+    /// Calculates the last host index of a prefix given an octet and the number of bits
+    /// </summary>
+    /// <param name="octet">An octet in the host prefix.</param>
+    /// <param name="bits">The bits of the CIDR prefix covering
+    /// <paramref name="octet"/>.</param>
+    /// <returns>The last host index of the route prefix.</returns>
     public static uint LastHostIndexOfPrefix(byte octet, int bits)
     {
         return OctetToBaseIndex((byte)(octet | s_hostMasks[bits]));
     }
 
-    // Returns the lower and upper bounds of host routes for a given prefix
-    public static (uint lowerBound, uint upperBound) LowerUpperBound(uint idx)
+    /// <summary>
+    /// Returns the lower and upper bounds of host routes for a given prefix
+    /// </summary>
+    /// <param name="index">An index of a prefix.</param>
+    /// <returns>The lower and upper bounds of indexes for a prefix.</returns>
+    public static (uint lowerBound, uint upperBound) LowerUpperBound(uint index)
     {
-        (byte octet, int bits) = s_baseIndexLookup[idx];
+        (byte octet, int bits) = s_baseIndexLookup[index];
         return (OctetToBaseIndex(octet), LastHostIndexOfPrefix(octet, bits));
     }
 
-    // Calculates the prefix mask based on base index and depth
-    public static int BaseIndexToPrefixMask(uint baseIdx, int depth)
+    /// <summary>
+    /// Calculates the prefix mask based on base index and depth
+    /// </summary>
+    /// <param name="baseIndex">The base index into a bitset.</param>
+    /// <param name="depth">Depth of the index in the tree.</param>
+    /// <returns>Prefix mask to use.</returns>
+    public static int BaseIndexToPrefixMask(uint baseIndex, int depth)
     {
-        (_, int prefixLength) = s_baseIndexLookup[baseIdx];
+        (_, int prefixLength) = s_baseIndexLookup[baseIndex];
         return depth * StrideLength + prefixLength;
     }
 
+    /// <summary>
+    /// Calculates the host mask for the number of bits of CIDR prefix.
+    /// </summary>
+    /// <param name="bits">Bits to mask in a host octet.</param>
+    /// <returns>The host mask.</returns>
     public static byte HostMask(int bits)
         => s_hostMasks[bits];
 
-    public static (byte octet, int bits) BaseIndexToPrefix(uint idx)
-        => s_baseIndexLookup[idx];
+    /// <summary>
+    /// Gets the octet and prefix length of a base index.
+    /// </summary>
+    /// <param name="baseIndex">A base index of a bitset.</param>
+    /// <returns>A tuple containing the octet and prefix length.</returns>
+    public static (byte octet, int prefixLength) BaseIndexToPrefix(uint baseIndex)
+        => s_baseIndexLookup[baseIndex];
 
     // Inverse of prefixToBaseIndex, returns the octet and prefix length of a base index
 
-    // octet and CIDR bits of baseIdx as lookup table.
+    // octet and CIDR bits of baseIndex as lookup table.
     // Use the pre computed lookup table, bits.LeadingZeros is too slow.
     //
-    //  func baseIndexToPrefix(baseIdx uint) (octet uint, pfxLen int) {
-    //  	nlz := bits.LeadingZeros(baseIdx)
+    //  func baseIndexToPrefix(baseIndex uint) (octet uint, pfxLen int) {
+    //  	nlz := bits.LeadingZeros(baseIndex)
     //  	pfxLen = strconv.IntSize - nlz - 1
-    //  	octet = (baseIdx & (0xFF >> (8 - pfxLen))) << (8 - pfxLen)
+    //  	octet = (baseIndex & (0xFF >> (8 - pfxLen))) << (8 - pfxLen)
     //  	return octet, pfxLen
     //  }
     private static readonly (byte octet, int bits)[] s_baseIndexLookup =

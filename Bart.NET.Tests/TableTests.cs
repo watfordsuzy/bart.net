@@ -426,6 +426,7 @@ public class TableTests
 #endregion Tailscale ART tests
 
     private static void CheckRoutes<TValue>(Table<TValue> table, params RouteTest<TValue>[] routes)
+        where TValue : notnull
     {
         foreach (RouteTest<TValue> route in routes)
         {
@@ -443,6 +444,7 @@ public class TableTests
     }
 
     private record class RouteTest<TValue>(string ipAddress, bool ShouldExist, TValue? ExpectedValue = default)
+        where TValue : notnull
     {
         public IPAddress IP { get; } = IPAddress.Parse(ipAddress);
     }
