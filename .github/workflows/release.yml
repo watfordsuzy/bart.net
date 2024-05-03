@@ -27,8 +27,6 @@ jobs:
 
       - name: Stamp Version Details
         uses: dotnet/nbgv@v0.4.2
-        with:
-          stamp: ./version.json
 
       - name: Set Version
         run: nbgv cloud
